@@ -430,13 +430,13 @@ class RunImpl:
         config: RunConfig,
     ) -> list[FunctionToolResult]:
         async def run_single_tool(
-            func_tool: FunctionTool, tool_call: ResponseFunctionToolCall
+            func_tool: FunctionTool, tool_call: ResponseFunctionToolCall, timeout: int = 120
         ) -> Any:
             with function_span(func_tool.name) as span_fn:
                 if config.trace_include_sensitive_data:
                     span_fn.span_data.input = tool_call.arguments
                 try:
-                    _, _, result = await asyncio.gather(
+                    _, _, result = await asyncio.wait_for(asyncio.gather(
                         hooks.on_tool_start(context_wrapper, agent, func_tool),
                         (
                             agent.hooks.on_tool_start(context_wrapper, agent, func_tool)
@@ -444,7 +444,7 @@ class RunImpl:
                             else _coro.noop_coroutine()
                         ),
                         func_tool.on_invoke_tool(context_wrapper, tool_call.arguments),
-                    )
+                    ), timeout=timeout)
 
                     await asyncio.gather(
                         hooks.on_tool_end(context_wrapper, agent, func_tool, result),
@@ -454,6 +454,15 @@ class RunImpl:
                             else _coro.noop_coroutine()
                         ),
                     )
+                except asyncio.TimeoutError as e:
+                    print("The operation timed out.")
+                    _error_tracing.attach_error_to_current_span(
+                        SpanError(
+                            message="Error running tool",
+                            data={"tool_name": func_tool.name, "error": str(e)},
+                        )
+                    )
+                    raise UserError(f"Error running tool {func_tool.name}: {e}") from e
                 except Exception as e:
                     _error_tracing.attach_error_to_current_span(
                         SpanError(
