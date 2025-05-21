@@ -430,7 +430,7 @@ class RunImpl:
         config: RunConfig,
     ) -> list[FunctionToolResult]:
         async def run_single_tool(
-            func_tool: FunctionTool, tool_call: ResponseFunctionToolCall, timeout: int = 120
+            func_tool: FunctionTool, tool_call: ResponseFunctionToolCall, timeout: int = 180
         ) -> Any:
             with function_span(func_tool.name) as span_fn:
                 if config.trace_include_sensitive_data:
